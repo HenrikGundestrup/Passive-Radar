@@ -3,7 +3,8 @@ import numpy as np
 
 def fractional_delay(signal, delay):
     """
-    Apply a fractional sample delay to a complex signal.
+    Apply a fractional sample delay to a complex signal
+    using an FFT-based phase shift.
 
     Parameters
     ----------
@@ -19,29 +20,43 @@ def fractional_delay(signal, delay):
     """
 
     N = len(signal)
-    n = np.arange(N)
 
-    delayed_n = n - delay
+    pad = int(np.ceil(delay)) + 10
 
-    delayed_signal = (
-        np.interp(
-            delayed_n,
-            n,
-            signal.real,
-            left=0,
-            right=0,
-        )
-        + 1j
-        * np.interp(
-            delayed_n,
-            n,
-            signal.imag,
-            left=0,
-            right=0,
-        )
+    padded = np.pad(
+        signal,
+        (pad, pad),
+        mode="constant",
     )
 
-    return delayed_signal
+    M = len(padded)
+
+    spectrum = np.fft.fft(
+        padded
+    )
+
+    frequencies = np.fft.fftfreq(
+        M
+    )
+
+    phase_shift = np.exp(
+        -1j
+        * 2
+        * np.pi
+        * frequencies
+        * delay
+    )
+
+    delayed = np.fft.ifft(
+        spectrum
+        * phase_shift
+    )
+
+    delayed = delayed[
+        pad:pad + N
+    ]
+
+    return delayed
 
 
 def apply_doppler(signal, doppler, sample_rate):
@@ -52,8 +67,10 @@ def apply_doppler(signal, doppler, sample_rate):
     ----------
     signal : np.ndarray
         Complex input signal.
+
     doppler : float
         Doppler frequency in Hz.
+
     sample_rate : float
         Sampling frequency in Hz.
 
@@ -63,10 +80,17 @@ def apply_doppler(signal, doppler, sample_rate):
         Doppler shifted signal.
     """
 
-    n = np.arange(len(signal))
+    n = np.arange(
+        len(signal)
+    )
 
     phase = np.exp(
-        1j * 2 * np.pi * doppler * n / sample_rate
+        1j
+        * 2
+        * np.pi
+        * doppler
+        * n
+        / sample_rate
     )
 
     return signal * phase

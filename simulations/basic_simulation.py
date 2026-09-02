@@ -1,29 +1,30 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from src.passive_radar.geometry import (
+from geometry import (
     bistatic_range,
     bistatic_delay,
     bistatic_doppler,
 )
 
-from src.passive_radar.signal import (
+from radar_signal import (
     generate_reference_signal,
     generate_noise,
 )
 
-from src.passive_radar.propagation import (
+from propagation import (
     fractional_delay,
     apply_doppler,
 )
 
-from src.passive_radar.cancellation import (
+from cancellation import (
     estimate_direct_path,
     cancel_direct_path,
 )
 
-from src.passive_radar.processing import (
-    cross_correlate,
+from processing import (
+    range_doppler_processing,
+    detect_peak,
 )
 
 
@@ -31,10 +32,7 @@ from src.passive_radar.processing import (
 # Parameters
 # ============================================================
 
-C = 299_792_458.0
-
 sample_rate = 1e6
-
 block_size = 2048
 num_blocks = 128
 
@@ -42,74 +40,93 @@ N = block_size * num_blocks
 
 carrier_frequency = 100e6
 
-target_amplitude = 0.1
-noise_amplitude = 0.5
+C = 299_792_458.0
+
+target_amplitude = 0.02
 direct_path_amplitude = 10.0
+noise_amplitude = 0.5
 
 
 # ============================================================
 # Geometry
 # ============================================================
 
-tx = np.array([0.0, 0.0])
+tx_position = np.array([0.0, 0.0])
+rx_position = np.array([10_000.0, 0.0])
 
-rx = np.array([10_000.0, 0.0])
-
-target = np.array([5_000.0, 20_000.0])
-
+target_position = np.array([5_000.0, 20_000.0])
 target_velocity = np.array([0.0, 250.0])
 
 
-# ============================================================
-# Calculate true target parameters
-# ============================================================
+tx_range = np.linalg.norm(
+    target_position - tx_position
+)
 
-true_direct_range = np.linalg.norm(rx - tx)
-
-true_direct_delay = true_direct_range / C * sample_rate
+rx_range = np.linalg.norm(
+    target_position - rx_position
+)
 
 true_target_range = bistatic_range(
-    tx,
-    target,
-    rx,
+    tx_position,
+    target_position,
+    rx_position
 )
 
-true_target_delay = (
-    bistatic_delay(
-        tx,
-        target,
-        rx,
-    )
-    * sample_rate
+true_target_delay = bistatic_delay(
+    tx_position,
+    target_position,
+    rx_position
 )
 
-true_doppler = bistatic_doppler(
-    tx,
-    target,
-    rx,
+true_target_delay_samples = (
+    true_target_delay * sample_rate
+)
+
+direct_path_range = np.linalg.norm(
+    rx_position - tx_position
+)
+
+direct_path_delay = (
+    direct_path_range / C * sample_rate
+)
+
+doppler = bistatic_doppler(
+    tx_position,
+    target_position,
+    rx_position,
     target_velocity,
-    carrier_frequency,
+    carrier_frequency
 )
 
+wavelength = C / carrier_frequency
 
+
+# ============================================================
+# Print geometry
+# ============================================================
+
+print()
 print("=" * 60)
-print("PASSIVE RADAR SIMULATION")
+print("BISTATIC RADAR GEOMETRY")
 print("=" * 60)
 
-print("\nTrue parameters")
-print("----------------")
+print(f"TX → Target range:   {tx_range:.2f} m")
+print(f"Target → RX range:   {rx_range:.2f} m")
+print(f"Bistatic range:      {true_target_range:.2f} m")
 
-print(
-    f"Direct-path delay: {true_direct_delay:.3f} samples"
-)
+print()
+print(f"Direct path range:   {direct_path_range:.2f} m")
+print(f"Direct path delay:   {direct_path_delay:.3f} samples")
 
-print(
-    f"Target delay:      {true_target_delay:.3f} samples"
-)
+print()
+print(f"Propagation time:    {true_target_delay * 1e6:.3f} µs")
+print(f"Target delay:        {true_target_delay_samples:.3f} samples")
 
-print(
-    f"Target Doppler:    {true_doppler:.2f} Hz"
-)
+print()
+print(f"Target velocity:     {np.linalg.norm(target_velocity):.2f} m/s")
+print(f"Carrier frequency:   {carrier_frequency:.2f} Hz")
+print(f"Wavelength:          {wavelength:.3f} m")
+print(f"Doppler shift:       {doppler:.2f} Hz")
 
 
 # ============================================================
@@ -118,7 +135,25 @@ print(
 
 reference = generate_reference_signal(
     N,
-    seed=42,
+    seed=42
+)
+
+
+# ============================================================
+# Generate target signal
+# ============================================================
+
+target = fractional_delay(
+    reference,
+    true_target_delay_samples
+)
+
+target *= target_amplitude
+
+target = apply_doppler(
+    target,
+    doppler,
+    sample_rate
 )
 
 
@@ -128,79 +163,75 @@ reference = generate_reference_signal(
 
 direct_path = fractional_delay(
     reference,
-    true_direct_delay,
+    direct_path_delay
 )
 
 direct_path *= direct_path_amplitude
 
 
 # ============================================================
-# Generate target echo
+# Generate noise
 # ============================================================
 
-target_echo = fractional_delay(
-    reference,
-    true_target_delay,
+noise = generate_noise(
+    N,
+    amplitude=noise_amplitude,
+    seed=123
 )
-
-target_echo = apply_doppler(
-    target_echo,
-    true_doppler,
-    sample_rate,
-)
-
-target_echo *= target_amplitude
 
 
 # ============================================================
 # Surveillance signal
 # ============================================================
 
-noise = generate_noise(
-    N,
-    amplitude=noise_amplitude,
-    seed=123,
-)
-
 surveillance = (
-    direct_path
-    + target_echo
+    target
+    + direct_path
     + noise
 )
 
 
 # ============================================================
-# Estimate direct path
+# Automatic direct-path estimation
 # ============================================================
 
-integer_direct_delay = int(
-    round(true_direct_delay)
+estimated_direct_delay, direct_coefficient = (
+    estimate_direct_path(
+        reference,
+        surveillance,
+        direct_path_delay
+    )
 )
 
-direct_coefficient = estimate_direct_path(
-    reference,
-    surveillance,
-    integer_direct_delay,
-)
 
-
-print("\nDirect-path estimation")
-print("----------------------")
+print()
+print("=" * 60)
+print("AUTOMATIC DIRECT-PATH ESTIMATION")
+print("=" * 60)
 
 print(
-    f"True delay:       {true_direct_delay:.3f} samples"
-)
-
-print(
-    f"Integer estimate: {integer_direct_delay} samples"
+    f"True direct delay:       "
+    f"{direct_path_delay:.3f} samples"
 )
 
 print(
-    f"Estimated amplitude: {abs(direct_coefficient):.6f}"
+    f"Estimated direct delay:  "
+    f"{estimated_direct_delay:.3f} samples"
 )
 
 print(
-    f"Estimated phase:     {np.angle(direct_coefficient):.6f} rad"
+    f"True direct amplitude:   "
+    f"{direct_path_amplitude:.6f}"
+)
+
+print(
+    f"Estimated amplitude:     "
+    f"{abs(direct_coefficient):.6f}"
+)
+
+print(
+    f"Estimated phase:         "
+    f"{np.angle(direct_coefficient):.6f} rad"
 )
 
 
@@ -208,40 +239,11 @@ print(
 # Direct-path cancellation
 # ============================================================
 
-cancelled = cancel_direct_path(
+surveillance_cancelled = cancel_direct_path(
     reference,
     surveillance,
-    integer_direct_delay,
-    direct_coefficient,
-)
-
-
-print("\nSignal power")
-print("------------")
-
-print(
-    f"Before cancellation: "
-    f"{np.mean(np.abs(surveillance) ** 2):.6f}"
-)
-
-print(
-    f"After cancellation:  "
-    f"{np.mean(np.abs(cancelled) ** 2):.6f}"
-)
-
-
-# ============================================================
-# Block processing
-# ============================================================
-
-blocks = cancelled.reshape(
-    num_blocks,
-    block_size,
-)
-
-reference_blocks = reference.reshape(
-    num_blocks,
-    block_size,
+    estimated_direct_delay,
+    direct_coefficient
 )
 
 
@@ -249,118 +251,94 @@ reference_blocks = reference.reshape(
 # Range-Doppler processing
 # ============================================================
 
-range_doppler = np.zeros(
-    (
+doppler_map, delay_axis, doppler_axis = (
+    range_doppler_processing(
+        reference,
+        surveillance_cancelled,
+        sample_rate,
+        block_size,
         num_blocks,
-        2 * block_size - 1,
-    ),
-    dtype=complex,
-)
-
-
-for block_index in range(num_blocks):
-
-    correlation, lags = cross_correlate(
-        reference_blocks[block_index],
-        blocks[block_index],
-    )
-
-    range_doppler[block_index, :] = correlation
-
-
-# ============================================================
-# Doppler FFT
-# ============================================================
-
-doppler_map = np.fft.fftshift(
-    np.fft.fft(
-        range_doppler,
-        axis=0,
-    ),
-    axes=0,
-)
-
-
-doppler_power = (
-    20
-    * np.log10(
-        np.abs(doppler_map) + 1e-12
     )
 )
 
 
 # ============================================================
-# Find detection
+# Target detection
 # ============================================================
 
-peak_index = np.unravel_index(
-    np.argmax(doppler_power),
-    doppler_power.shape,
-)
-
-doppler_index = peak_index[0]
-delay_index = peak_index[1]
-
-detected_delay = lags[delay_index]
-
-doppler_frequency_axis = np.fft.fftshift(
-    np.fft.fftfreq(
-        num_blocks,
-        d=block_size / sample_rate,
-    )
-)
-
-detected_doppler = (
-    doppler_frequency_axis[doppler_index]
+detected_delay, detected_doppler = detect_peak(
+    doppler_map,
+    delay_axis,
+    doppler_axis,
 )
 
 
-print("\nDetection")
-print("---------")
+print()
+print("=" * 60)
+print("PASSIVE RADAR RANGE-DOPPLER")
+print("=" * 60)
 
 print(
-    f"True delay:      {true_target_delay:.3f} samples"
+    f"True delay:       "
+    f"{true_target_delay_samples:.3f} samples"
 )
 
 print(
-    f"Detected delay:  {detected_delay} samples"
+    f"Detected delay:   "
+    f"{detected_delay} samples"
+)
+
+print()
+print(
+    f"True Doppler:     "
+    f"{doppler:.2f} Hz"
 )
 
 print(
-    f"True Doppler:    {true_doppler:.2f} Hz"
+    f"Detected Doppler: "
+    f"{detected_doppler:.2f} Hz"
 )
 
-print(
-    f"Detected Doppler: {detected_doppler:.2f} Hz"
-)
+print()
+print(f"Target amplitude:      {target_amplitude}")
+print(f"Direct path amplitude: {direct_path_amplitude}")
+print(f"Noise amplitude:       {noise_amplitude}")
 
 
 # ============================================================
 # Plot range-Doppler map
 # ============================================================
 
+power_db = 20 * np.log10(
+    np.abs(doppler_map)
+    / np.max(np.abs(doppler_map))
+    + 1e-12
+)
+
 plt.figure(figsize=(10, 6))
 
 plt.imshow(
-    doppler_power,
+    power_db,
     aspect="auto",
     origin="lower",
     extent=[
-        lags[0],
-        lags[-1],
-        doppler_frequency_axis[0],
-        doppler_frequency_axis[-1],
-    ],
+        delay_axis[0],
+        delay_axis[-1],
+        doppler_axis[0],
+        doppler_axis[-1]
+    ]
 )
-
-plt.xlabel("Delay [samples]")
-plt.ylabel("Doppler [Hz]")
-plt.title("Passive Radar Range-Doppler Map")
 
 plt.colorbar(
-    label="Magnitude [dB]"
+    label="Relative power (dB)"
 )
 
-plt.tight_layout()
+plt.xlabel("Delay (samples)")
+plt.ylabel("Doppler (Hz)")
+
+plt.title(
+    "Passive Radar Range-Doppler Map"
+)
 
 plt.show()
+
