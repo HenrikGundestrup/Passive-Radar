@@ -22,3 +22,6 @@ Thumbs.db
 # Generated results
 results/
 *.png
+
+# SDR recordings
+simulations/SDR_Data/*.npy
