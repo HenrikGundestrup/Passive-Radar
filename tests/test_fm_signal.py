@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from simulations.radar_signal import generate_fm_signal
+from src.radar_signal import generate_fm_signal
 
 
 # ============================================================

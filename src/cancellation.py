@@ -1,6 +1,6 @@
 import numpy as np
 
-from propagation import fractional_delay
+from src.propagation import fractional_delay
 
 
 def estimate_direct_path(
