@@ -56,3 +56,35 @@ Passive-Radar/
 ├── src/
 ├── tests/
 └── docs/
+                 ┌──────────────────┐
+                 │  Generate FM     │
+                 │    reference     │
+                 └────────┬─────────┘
+                          │
+              ┌───────────┴───────────┐
+              │                       │
+              ▼                       ▼
+       Direct path              Target path
+       delay = 33.356           delay = 137.532
+              │                       │
+              │                 + Doppler
+              │                 -161.80 Hz
+              │                       │
+              └───────────┬───────────┘
+                          ▼
+                  + receiver noise
+                          │
+                          ▼
+                    Surveillance
+                          │
+                          ▼
+               Direct-path estimation
+                          │
+                          ▼
+                Direct-path cancellation
+                          │
+                          ▼
+                 Range-Doppler processing
+                          │
+                          ▼
+                     Target peak

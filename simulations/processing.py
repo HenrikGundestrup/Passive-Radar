@@ -27,10 +27,14 @@ def range_doppler_processing(
     sample_rate,
     block_size,
     num_blocks,
+    direct_path_delay,
 ):
     """
     Perform range-Doppler processing using block-based
     cross-correlation followed by a Doppler FFT.
+
+    Only delays at or beyond the direct-path delay
+    are retained.
 
     Returns
     -------
@@ -38,7 +42,8 @@ def range_doppler_processing(
         Complex range-Doppler map.
 
     delay_axis : ndarray
-        Delay axis in samples.
+        Excess delay axis in samples, relative to
+        the direct path.
 
     doppler_axis : ndarray
         Doppler axis in Hz.
@@ -92,6 +97,32 @@ def range_doppler_processing(
     )
 
     # --------------------------------------------------------
+    # Original delay axis
+    # --------------------------------------------------------
+
+    delay_axis_full = np.arange(
+        -(block_size - 1),
+        block_size
+    )
+
+    # --------------------------------------------------------
+    # Remove delays before direct path
+    # --------------------------------------------------------
+
+    direct_delay_bin = int(
+        round(direct_path_delay)
+    )
+
+    valid = delay_axis_full >= direct_delay_bin
+
+    delay_profiles = delay_profiles[:, valid]
+
+    delay_axis = (
+        delay_axis_full[valid]
+        - direct_delay_bin
+    )
+
+    # --------------------------------------------------------
     # Doppler processing
     # --------------------------------------------------------
 
@@ -104,13 +135,8 @@ def range_doppler_processing(
     )
 
     # --------------------------------------------------------
-    # Axes
+    # Doppler axis
     # --------------------------------------------------------
-
-    delay_axis = np.arange(
-        -(block_size - 1),
-        block_size
-    )
 
     doppler_axis = np.fft.fftshift(
         np.fft.fftfreq(
@@ -137,7 +163,7 @@ def detect_peak(
     Returns
     -------
     detected_delay : int
-        Detected delay in samples.
+        Detected excess delay in samples.
 
     detected_doppler : float
         Detected Doppler frequency in Hz.

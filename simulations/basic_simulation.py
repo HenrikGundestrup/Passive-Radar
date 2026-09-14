@@ -1,14 +1,16 @@
+
 import numpy as np
 import matplotlib.pyplot as plt
 
 from geometry import (
+    C,
     bistatic_range,
     bistatic_delay,
     bistatic_doppler,
 )
 
 from radar_signal import (
-    generate_reference_signal,
+    generate_fm_signal,
     generate_noise,
 )
 
@@ -39,8 +41,6 @@ num_blocks = 128
 N = block_size * num_blocks
 
 carrier_frequency = 100e6
-
-C = 299_792_458.0
 
 target_amplitude = 0.02
 direct_path_amplitude = 10.0
@@ -82,12 +82,18 @@ true_target_delay_samples = (
     true_target_delay * sample_rate
 )
 
+
 direct_path_range = np.linalg.norm(
     rx_position - tx_position
 )
 
-direct_path_delay = (
+direct_path_delay_samples = (
     direct_path_range / C * sample_rate
+)
+
+true_excess_delay_samples = (
+    true_target_delay_samples
+    - direct_path_delay_samples
 )
 
 doppler = bistatic_doppler(
@@ -116,7 +122,7 @@ print(f"Bistatic range:      {true_target_range:.2f} m")
 
 print()
 print(f"Direct path range:   {direct_path_range:.2f} m")
-print(f"Direct path delay:   {direct_path_delay:.3f} samples")
+print(f"Direct path delay:   {direct_path_delay_samples:.3f} samples")
 
 print()
 print(f"Propagation time:    {true_target_delay * 1e6:.3f} µs")
@@ -130,12 +136,13 @@ print(f"Doppler shift:       {doppler:.2f} Hz")
 
 
 # ============================================================
-# Generate reference signal
+# Generate FM reference signal
 # ============================================================
 
-reference = generate_reference_signal(
-    N,
-    seed=42
+reference = generate_fm_signal(
+    N=N,
+    sample_rate=sample_rate,
+    frequency_deviation=75e3,
 )
 
 
@@ -163,7 +170,7 @@ target = apply_doppler(
 
 direct_path = fractional_delay(
     reference,
-    direct_path_delay
+    direct_path_delay_samples
 )
 
 direct_path *= direct_path_amplitude
@@ -199,7 +206,7 @@ estimated_direct_delay, direct_coefficient = (
     estimate_direct_path(
         reference,
         surveillance,
-        direct_path_delay
+        direct_path_delay_samples
     )
 )
 
@@ -211,7 +218,7 @@ print("=" * 60)
 
 print(
     f"True direct delay:       "
-    f"{direct_path_delay:.3f} samples"
+    f"{direct_path_delay_samples:.3f} samples"
 )
 
 print(
@@ -258,6 +265,7 @@ doppler_map, delay_axis, doppler_axis = (
         sample_rate,
         block_size,
         num_blocks,
+        direct_path_delay_samples,
     )
 )
 
@@ -280,7 +288,7 @@ print("=" * 60)
 
 print(
     f"True delay:       "
-    f"{true_target_delay_samples:.3f} samples"
+    f"{true_excess_delay_samples:.3f} samples"
 )
 
 print(
@@ -306,13 +314,16 @@ print(f"Noise amplitude:       {noise_amplitude}")
 
 
 # ============================================================
-# Plot range-Doppler map
+# Range-Doppler map
 # ============================================================
 
-power_db = 20 * np.log10(
-    np.abs(doppler_map)
-    / np.max(np.abs(doppler_map))
-    + 1e-12
+power_db = (
+    20
+    * np.log10(
+        np.abs(doppler_map)
+        / np.max(np.abs(doppler_map))
+        + 1e-12
+    )
 )
 
 plt.figure(figsize=(10, 6))
@@ -330,15 +341,22 @@ plt.imshow(
 )
 
 plt.colorbar(
-    label="Relative power (dB)"
+    label="Relative power [dB]"
 )
 
-plt.xlabel("Delay (samples)")
-plt.ylabel("Doppler (Hz)")
+plt.xlabel("Delay [samples]")
+plt.ylabel("Doppler [Hz]")
 
 plt.title(
     "Passive Radar Range-Doppler Map"
 )
+
+plt.tight_layout()
+
+
+# ============================================================
+# Show all plots
+# ============================================================
 
 plt.show()
 

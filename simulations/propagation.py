@@ -10,14 +10,18 @@ def fractional_delay(signal, delay):
     ----------
     signal : np.ndarray
         Complex input signal.
+
     delay : float
-        Delay in samples.
+        Delay in samples. Must be non-negative.
 
     Returns
     -------
     np.ndarray
-        Delayed signal.
+        Delayed signal with the same length as the input.
     """
+
+    if delay < 0:
+        raise ValueError("Delay must be non-negative.")
 
     N = len(signal)
 
@@ -31,25 +35,16 @@ def fractional_delay(signal, delay):
 
     M = len(padded)
 
-    spectrum = np.fft.fft(
-        padded
-    )
+    spectrum = np.fft.fft(padded)
 
-    frequencies = np.fft.fftfreq(
-        M
-    )
+    frequencies = np.fft.fftfreq(M)
 
     phase_shift = np.exp(
-        -1j
-        * 2
-        * np.pi
-        * frequencies
-        * delay
+        -1j * 2 * np.pi * frequencies * delay
     )
 
     delayed = np.fft.ifft(
-        spectrum
-        * phase_shift
+        spectrum * phase_shift
     )
 
     delayed = delayed[
@@ -80,17 +75,10 @@ def apply_doppler(signal, doppler, sample_rate):
         Doppler shifted signal.
     """
 
-    n = np.arange(
-        len(signal)
-    )
+    n = np.arange(len(signal))
 
     phase = np.exp(
-        1j
-        * 2
-        * np.pi
-        * doppler
-        * n
-        / sample_rate
+        1j * 2 * np.pi * doppler * n / sample_rate
     )
 
     return signal * phase
