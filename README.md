@@ -45,17 +45,48 @@ The current simulation uses a bistatic geometry with:
 ## Project structure
 
 ```text
-Passive-Radar/
+Passive-Radar
+│   .gitignore
+│   README.md
+│   requirements.txt
 │
-├── README.md
-├── requirements.txt
+├───docs
+├───experiments
+│       detection_probability.py
+│       __init__.py
 │
-├── simulations/
-│   └── basic_simulation.py
+├───simulations
+│   │   basic_simulation.py
+│   │   __init__.py
+│   │
+│   └───SDR_Data
+│          analyze_recording.py
+│          extract_fm.py
+│          record_sdr.py
+│          self_radar.py
+│          zoom_fm.py
+│   
+│   
 │
-├── src/
-├── tests/
-└── docs/
+├───src
+│   │   cancellation.py
+│   │   geometry.py
+│   │   processing.py
+│   │   propagation.py
+│   │   radar_signal.py
+│   └───__init__.py
+│
+└───tests
+    │   test_cancellation.py
+    │   test_fm_signal.py
+    │   test_geometry.py
+    │   test_processing.py
+    │   test_propagation.py
+    │   test_signal.py
+    └───__init__.py
+
+
+
                  ┌──────────────────┐
                  │  Generate FM     │
                  │    reference     │

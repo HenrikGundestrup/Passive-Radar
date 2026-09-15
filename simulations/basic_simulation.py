@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -189,6 +190,18 @@ def run_simulation(
         seed=noise_seed,
     )
 
+    target_power = np.mean(
+        np.abs(target) ** 2
+    )
+
+    noise_power = np.mean(
+        np.abs(noise) ** 2
+    )
+
+    snr_db = 10 * np.log10(
+        target_power / noise_power
+    )
+
     # ========================================================
     # Surveillance signal
     # ========================================================
@@ -203,6 +216,8 @@ def run_simulation(
     # Automatic direct-path estimation
     # ========================================================
 
+    start_time = time.perf_counter()
+
     estimated_direct_delay, direct_coefficient = (
         estimate_direct_path(
             reference,
@@ -210,6 +225,8 @@ def run_simulation(
             direct_path_delay_samples,
         )
     )
+
+    direct_path_time = time.perf_counter() - start_time
 
     # ========================================================
     # Direct-path cancellation
@@ -226,6 +243,8 @@ def run_simulation(
     # Range-Doppler processing
     # ========================================================
 
+    start_time = time.perf_counter()
+
     doppler_map, delay_axis, doppler_axis = (
         range_doppler_processing(
             reference,
@@ -236,6 +255,8 @@ def run_simulation(
             direct_path_delay_samples,
         )
     )
+
+    range_doppler_time = time.perf_counter() - start_time
 
     # ========================================================
     # Target detection
@@ -312,6 +333,11 @@ def run_simulation(
         "doppler_map": doppler_map,
         "delay_axis": delay_axis,
         "doppler_axis": doppler_axis,
+        "direct_path_time": direct_path_time,
+        "range_doppler_time": range_doppler_time,
+        "target_power": target_power,
+        "noise_power": noise_power,
+        "snr_db": snr_db,
     }
 
 
