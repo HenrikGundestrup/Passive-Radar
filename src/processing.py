@@ -167,9 +167,20 @@ def detect_peak(
 
     detected_doppler : float
         Detected Doppler frequency in Hz.
+
+    peak_power : float
+        Power of the strongest peak in the range-Doppler map.
     """
 
-    power = np.abs(doppler_map)
+    # --------------------------------------------------------
+    # Calculate power
+    # --------------------------------------------------------
+
+    power = np.abs(doppler_map) ** 2
+
+    # --------------------------------------------------------
+    # Find strongest peak
+    # --------------------------------------------------------
 
     peak_index = np.unravel_index(
         np.argmax(power),
@@ -179,6 +190,10 @@ def detect_peak(
     doppler_index = peak_index[0]
     delay_index = peak_index[1]
 
+    # --------------------------------------------------------
+    # Convert indices to physical quantities
+    # --------------------------------------------------------
+
     detected_delay = delay_axis[
         delay_index
     ]
@@ -187,7 +202,12 @@ def detect_peak(
         doppler_index
     ]
 
+    peak_power = power[
+        peak_index
+    ]
+
     return (
         detected_delay,
-        detected_doppler
+        detected_doppler,
+        peak_power
     )

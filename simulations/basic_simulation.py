@@ -198,9 +198,13 @@ def run_simulation(
         np.abs(noise) ** 2
     )
 
-    snr_db = 10 * np.log10(
-        target_power / noise_power
-    )
+    if target_power == 0:
+        snr_db = -np.inf
+
+    else:
+        snr_db = 10 * np.log10(
+            target_power / noise_power
+        )
 
     # ========================================================
     # Surveillance signal
@@ -262,7 +266,7 @@ def run_simulation(
     # Target detection
     # ========================================================
 
-    detected_delay, detected_doppler = detect_peak(
+    detected_delay, detected_doppler, peak_power = detect_peak(
         doppler_map,
         delay_axis,
         doppler_axis,
@@ -338,6 +342,7 @@ def run_simulation(
         "target_power": target_power,
         "noise_power": noise_power,
         "snr_db": snr_db,
+        "peak_power": peak_power,
     }
 
 
